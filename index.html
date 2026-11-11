@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deteksi Cabai FL</title>
+<style>
+  :root {
+    --bg: #f6f7f2; --surface: #ffffff; --surface-2: #eef1e8; --text: #1d2318; --muted: #5d6656;
+    --border: #d9ded2; --accent: #2f7d32; --accent-soft: #e3f1e1; --chili: #c62828;
+    --warn-bg: #fff6df; --warn-text: #7a5600; --bar: #2f7d32; --bar-2: #c62828; --bar-3: #8a8f86;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12150f; --surface: #1b1f17; --surface-2: #232820; --text: #e7ebe1; --muted: #9aa392;
+      --border: #333a2d; --accent: #7cc47f; --accent-soft: #233523; --chili: #ef6b6b;
+      --warn-bg: #3a3017; --warn-text: #f1d48a; --bar: #7cc47f; --bar-2: #ef6b6b; --bar-3: #6f766a;
+      --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12150f; --surface: #1b1f17; --surface-2: #232820; --text: #e7ebe1; --muted: #9aa392;
+    --border: #333a2d; --accent: #7cc47f; --accent-soft: #233523; --chili: #ef6b6b;
+    --warn-bg: #3a3017; --warn-text: #f1d48a; --bar: #7cc47f; --bar-2: #ef6b6b; --bar-3: #6f766a;
+    --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  header svg { flex: none; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  .tabs { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 10px;
+    margin-bottom: 16px; width: fit-content; }
+  .tabs button { border: 0; background: transparent; color: var(--muted); padding: 7px 14px;
+    border-radius: 7px; font: inherit; font-weight: 500; cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; box-shadow: var(--shadow); margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .status { display: flex; gap: 10px; align-items: flex-start; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 7px; flex: none; background: var(--bar-3); }
+  .dot.ok { background: var(--accent); } .dot.err { background: var(--chili); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { background: var(--surface-2); border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+  .warn { background: var(--warn-bg); color: var(--warn-text); border-radius: 8px; padding: 10px 12px;
+    font-size: 13px; margin-top: 10px; }
+  .warn code, .muted code { font-size: 12px; }
+  .drop { border: 1.5px dashed var(--border); border-radius: 12px; min-height: 260px; display: grid;
+    place-items: center; text-align: center; padding: 16px; cursor: pointer; position: relative;
+    background: var(--surface-2); overflow: hidden; }
+  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop img { max-width: 100%; max-height: 320px; border-radius: 8px; display: block; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit;
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 500; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  :root[data-theme="dark"] .btn.primary { color: #10200f; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.primary { color: #10200f; } }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .hasil-utama { font-size: 26px; font-weight: 650; margin: 2px 0; letter-spacing: -.01em; }
+  .bars { display: grid; gap: 10px; margin-top: 12px; }
+  .bar-row { display: grid; grid-template-columns: 120px 1fr 56px; gap: 10px; align-items: center; font-size: 13px; }
+  .bar-track { height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--bar-3); border-radius: 999px; transition: width .4s; }
+  .bar-row.top .bar-fill { background: var(--bar); }
+  .bar-row span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); font-size: 13px; padding: 24px 0; text-align: center; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; }
+  tr.hl td { background: var(--accent-soft); font-weight: 600; }
+  .scroll { overflow-x: auto; }
+  svg text { fill: var(--muted); font-size: 11px; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 6px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .kpi { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+  .kpi b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .kpi span { font-size: 12px; color: var(--muted); }
+  .cam { position: relative; border-radius: 12px; overflow: hidden; background: #0d0f0b;
+    aspect-ratio: 3 / 4; max-height: 70vh; width: 100%; }
+  @media (min-width: 721px) { .cam { aspect-ratio: 4 / 3; } }
+  .cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cam-guide { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    border: 2px solid rgba(255,255,255,.85); border-radius: 14px; box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
+    pointer-events: none; }
+  .cam-label { position: absolute; left: 12px; right: 12px; bottom: 12px; background: rgba(0,0,0,.6);
+    color: #fff; padding: 8px 12px; border-radius: 10px; font-weight: 600; display: flex;
+    justify-content: space-between; gap: 8px; backdrop-filter: blur(4px); }
+  .cam-label.low { color: #ffd88a; }
+  .cam-off { position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
+    padding: 16px; color: #e7ebe1; gap: 4px; }
+  .cam-off .muted { color: #b5bdad; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">
+      <rect width="36" height="36" rx="9" fill="var(--accent-soft)"/>
+      <path d="M21 9c1 2 0 3-1 4" stroke="var(--accent)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M20 13c3 1 4 4 2 8-2 5-7 7-11 7 3-2 5-5 6-9 1-3 1-6 3-6z" fill="var(--chili)"/>
+    </svg>
+    <div>
+      <h1>Deteksi Hama & Penyakit Cabai</h1>
+      <p>Uji coba model global hasil Federated Learning (FedAvg). Inferensi berjalan di browser.</p>
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="kamera">Kamera Langsung</button>
+    <button role="tab" aria-selected="false" data-tab="deteksi">Unggah Foto</button>
+    <button role="tab" aria-selected="false" data-tab="simulasi">Hasil Simulasi</button>
+  </div>
+
+  <!-- ================= STATUS MODEL (dipakai semua tab deteksi) ================= -->
+  <div id="panel-model">
+    <div class="card">
+      <div class="status">
+        <div class="dot" id="dot"></div>
+        <div style="flex:1">
+          <div id="status-teks"><b>Memuat model…</b></div>
+          <div class="chips" id="model-chips"></div>
+          <div class="warn" id="model-warn" hidden>
+            File <code>model_cabai.js</code> tidak ditemukan di folder yang sama dengan halaman ini.
+            Buat dulu dengan:<br><code>python ekspor_web.py hasil/&lt;folder_hasil&gt;/global_model.pt</code><br>
+            atau pilih file <code>model_cabai.js</code> secara manual:
+            <div class="btns"><label class="btn">Pilih model_cabai.js
+              <input type="file" id="pilih-model" accept=".js" hidden></label></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TAB KAMERA LANGSUNG ================= -->
+  <section id="tab-kamera">
+    <div class="grid">
+      <div class="card">
+        <h2>Kamera</h2>
+        <div class="cam" id="cam">
+          <video id="video" playsinline muted></video>
+          <div class="cam-guide" id="cam-guide" hidden></div>
+          <div class="cam-label" id="cam-label" hidden></div>
+          <div class="cam-off" id="cam-off">
+            <div style="font-weight:500">Kamera belum aktif</div>
+            <div class="muted">Arahkan daun cabai ke dalam kotak panduan setelah kamera menyala.</div>
+          </div>
+        </div>
+        <div class="btns">
+          <button class="btn primary" id="cam-start">Nyalakan kamera</button>
+          <button class="btn" id="cam-flip" disabled>Ganti kamera</button>
+          <button class="btn" id="cam-freeze" disabled>Bekukan</button>
+        </div>
+        <div class="warn" id="cam-err" hidden></div>
+      </div>
+
+      <div class="card">
+        <h2>Deteksi langsung</h2>
+        <div id="live-kosong" class="empty">Nyalakan kamera untuk mulai mendeteksi.</div>
+        <div id="live" hidden>
+          <div class="muted" id="live-status">Prediksi teratas</div>
+          <div class="hasil-utama" id="live-label">–</div>
+          <div class="muted" id="live-info"></div>
+          <div class="bars" id="live-bars"></div>
+          <div class="warn" id="live-low" hidden>Model belum yakin. Dekatkan kamera ke daun dan pastikan cahaya cukup.</div>
+          <div class="muted" style="margin-top:12px">Probabilitas dihaluskan dari beberapa frame terakhir agar label tidak berkedip.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= TAB UNGGAH FOTO ================= -->
+  <section id="tab-deteksi" hidden>
+    <div class="grid">
+      <div class="card">
+        <h2>Citra daun / tanaman</h2>
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Pilih citra">
+          <div id="drop-isi">
+            <div style="font-weight:500">Seret citra ke sini atau klik untuk memilih</div>
+            <div class="muted">JPG / PNG, satu citra per prediksi</div>
+          </div>
+          <img id="preview" alt="Pratinjau citra" hidden>
+        </div>
+        <div class="btns">
+          <label class="btn">Pilih file<input type="file" id="pilih-file" accept="image/*" hidden></label>
+          <label class="btn">Kamera<input type="file" id="pilih-kamera" accept="image/*" capture="environment" hidden></label>
+          <button class="btn" id="reset" disabled>Hapus</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Hasil prediksi</h2>
+        <div id="hasil-kosong" class="empty">Belum ada citra yang diprediksi.</div>
+        <div id="hasil" hidden>
+          <div class="muted">Prediksi teratas</div>
+          <div class="hasil-utama" id="label-utama">–</div>
+          <div class="muted" id="info-utama"></div>
+          <div class="bars" id="bars"></div>
+          <div class="warn" id="low-conf" hidden>Keyakinan model rendah (&lt; 60%). Coba citra lain yang lebih jelas.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= TAB HASIL SIMULASI ================= -->
+  <section id="tab-simulasi" hidden>
+    <div class="card">
+      <h2>Muat hasil simulasi</h2>
+      <p class="muted" style="margin:0 0 8px">Pilih file dari folder <code>hasil/&lt;partisi&gt;_&lt;timestamp&gt;/</code>:
+        <code>per_ronde.csv</code>, <code>perbandingan.csv</code>, <code>fairness.csv</code> (boleh sekaligus).</p>
+      <label class="btn primary">Pilih file CSV<input type="file" id="pilih-csv" accept=".csv" multiple hidden></label>
+      <span class="muted" id="csv-info" style="margin-left:8px"></span>
+    </div>
+    <div id="sim-kosong" class="empty">Belum ada file hasil yang dimuat.</div>
+
+    <div class="card" id="card-kpi" hidden><div class="kpis" id="kpis"></div></div>
+    <div class="card" id="card-ronde" hidden>
+      <h2>Kinerja global model per ronde (test set global)</h2>
+      <div id="chart-ronde"></div>
+      <div class="legend"><span><i style="background:var(--bar)"></i>Accuracy</span>
+        <span><i style="background:var(--bar-2)"></i>Macro F1</span>
+        <span><i style="background:var(--bar-3)"></i>Loss (sumbu kanan)</span></div>
+    </div>
+    <div class="grid">
+      <div class="card" id="card-banding" hidden>
+        <h2>Perbandingan skenario</h2>
+        <div class="scroll"><table id="tbl-banding"></table></div>
+      </div>
+      <div class="card" id="card-fair" hidden>
+        <h2>Fairness: akurasi global model di val tiap klien</h2>
+        <div class="scroll"><table id="tbl-fair"></table></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- Model hasil ekspor (dibuat oleh ekspor_web.py). Boleh tidak ada. -->
+<script src="model_cabai.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+
+// ---------- Tab ----------
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach((x) => {
+    x.setAttribute("aria-selected", x === b);
+    $("tab-" + x.dataset.tab).hidden = x !== b;
+  });
+  $("panel-model").hidden = b.dataset.tab === "simulasi";
+  if (b.dataset.tab !== "kamera") matikanKamera(); // hemat baterai saat pindah tab
+}));
+
+// ---------- Model ----------
+let sesi = null, info = null, citraTerakhir = null;
+if (window.ort) {
+  ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
+  ort.env.wasm.numThreads = 1; // aman untuk file:// (tanpa cross-origin isolation)
+}
+
+function setStatus(teks, kelasDot) {
+  $("status-teks").innerHTML = teks;
+  $("dot").className = "dot " + (kelasDot || "");
+}
+
+function b64KeBytes(b64) {
+  const bin = atob(b64), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function muatModel(m) {
+  if (!window.ort) { setStatus("<b>onnxruntime-web gagal dimuat.</b> Perlu koneksi internet untuk pustaka inferensi.", "err"); return; }
+  try {
+    setStatus("<b>Menyiapkan model…</b>");
+    sesi = await ort.InferenceSession.create(b64KeBytes(m.onnx_b64), { executionProviders: ["wasm"] });
+    info = m;
+    $("model-warn").hidden = true;
+    setStatus(`<b>Model siap</b> <span class="muted">· ${m.model} · ${m.kelas.length} kelas · input ${m.img_size}×${m.img_size}${m.ronde != null ? " · ronde " + m.ronde : ""}</span>`, "ok");
+    $("model-chips").innerHTML = m.kelas.map((k) => `<span class="chip">${esc(k)}</span>`).join("");
+    if (citraTerakhir) prediksi(citraTerakhir);
+  } catch (e) {
+    setStatus("<b>Gagal memuat model:</b> " + esc(e.message || e), "err");
+  }
+}
+
+// Baca model_cabai.js yang dipilih manual tanpa mengeksekusinya
+$("pilih-model").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const teks = await f.text();
+  const mJson = teks.match(/window\.MODEL_CABAI = (\{.*?\});\n/);
+  const mB64 = teks.match(/onnx_b64 = "([A-Za-z0-9+/=]+)"/);
+  if (!mJson || !mB64) { setStatus("<b>File bukan model_cabai.js yang valid.</b>", "err"); return; }
+  const m = JSON.parse(mJson[1]); m.onnx_b64 = mB64[1];
+  muatModel(m);
+});
+
+if (window.MODEL_CABAI) muatModel(window.MODEL_CABAI);
+else { setStatus("<b>Model belum dimuat</b>", "err"); $("model-warn").hidden = false; }
+
+// ---------- Input citra ----------
+const drop = $("drop");
+drop.addEventListener("click", () => $("pilih-file").click());
+drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("pilih-file").click(); } });
+["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f) bacaCitra(f); });
+$("pilih-file").addEventListener("change", (e) => e.target.files[0] && bacaCitra(e.target.files[0]));
+$("pilih-kamera").addEventListener("change", (e) => e.target.files[0] && bacaCitra(e.target.files[0]));
+$("reset").addEventListener("click", () => {
+  citraTerakhir = null; $("preview").hidden = true; $("drop-isi").hidden = false;
+  $("hasil").hidden = true; $("hasil-kosong").hidden = false; $("reset").disabled = true;
+  $("pilih-file").value = ""; $("pilih-kamera").value = "";
+});
+
+function bacaCitra(file) {
+  if (!file.type.startsWith("image/")) return;
+  const url = URL.createObjectURL(file);
+  const img = $("preview");
+  img.onload = () => { citraTerakhir = img; prediksi(img); };
+  img.src = url; img.hidden = false; $("drop-isi").hidden = true; $("reset").disabled = false;
+}
+
+// Preprocessing sama dengan skrip Python: Resize(img,img) -> ToTensor -> Normalize ImageNet.
+// crop = [sx, sy, sw, sh] opsional (dipakai kamera: hanya area kotak panduan).
+const kanvasPre = document.createElement("canvas");
+function keTensor(img, ukuran, mean, std, crop) {
+  const c = kanvasPre; c.width = c.height = ukuran;
+  const ctx = c.getContext("2d", { willReadFrequently: true }); ctx.imageSmoothingQuality = "high";
+  if (crop) ctx.drawImage(img, ...crop, 0, 0, ukuran, ukuran);
+  else ctx.drawImage(img, 0, 0, ukuran, ukuran);
+  const px = ctx.getImageData(0, 0, ukuran, ukuran).data, n = ukuran * ukuran;
+  const data = new Float32Array(3 * n);
+  for (let i = 0; i < n; i++)
+    for (let ch = 0; ch < 3; ch++) data[ch * n + i] = (px[i * 4 + ch] / 255 - mean[ch]) / std[ch];
+  return new ort.Tensor("float32", data, [1, 3, ukuran, ukuran]);
+}
+
+function softmax(a) { const m = Math.max(...a), e = a.map((v) => Math.exp(v - m)), s = e.reduce((x, y) => x + y, 0); return e.map((v) => v / s); }
+
+async function prediksi(img) {
+  if (!sesi) { $("hasil-kosong").textContent = "Citra siap, tetapi model belum dimuat."; return; }
+  const t0 = performance.now();
+  const out = await sesi.run({ [sesi.inputNames[0]]: keTensor(img, info.img_size, info.mean, info.std) });
+  const prob = softmax(Array.from(out[sesi.outputNames[0]].data));
+  const ms = performance.now() - t0;
+  const urut = prob.map((p, i) => ({ p, k: info.kelas[i] })).sort((a, b) => b.p - a.p);
+  $("label-utama").textContent = urut[0].k.replace(/_/g, " ");
+  $("info-utama").textContent = `Keyakinan ${(urut[0].p * 100).toFixed(1)}% · waktu inferensi ${ms.toFixed(0)} ms`;
+  $("bars").innerHTML = urut.map((r, i) => `<div class="bar-row${i === 0 ? " top" : ""}">
+      <span>${esc(r.k.replace(/_/g, " "))}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(r.p * 100).toFixed(1)}%"></div></div>
+      <span>${(r.p * 100).toFixed(1)}%</span></div>`).join("");
+  $("low-conf").hidden = urut[0].p >= 0.6;
+  $("hasil").hidden = false; $("hasil-kosong").hidden = true;
+}
+
+// ---------- Kamera langsung ----------
+const video = $("video");
+const kam = { stream: null, facing: "environment", jalan: false, beku: false, sibuk: false,
+  ema: null, tAkhir: 0, fps: 0, latensi: 0 };
+const INTERVAL_MS = 200;   // jeda minimal antar inferensi (~5 prediksi/detik)
+const ALPHA_EMA = 0.4;     // bobot frame terbaru saat menghaluskan probabilitas
+const AMBANG_YAKIN = 0.6;  // di bawah ini dianggap "belum yakin"
+
+function tampilErrKamera(pesan) { $("cam-err").innerHTML = pesan; $("cam-err").hidden = !pesan; }
+
+async function nyalakanKamera() {
+  tampilErrKamera("");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    tampilErrKamera(window.isSecureContext ? "Browser ini tidak mendukung akses kamera."
+      : "Akses kamera butuh <b>HTTPS</b> atau <b>localhost</b>. Di HP, jalankan <code>python server_web.py</code> lalu buka alamat https yang ditampilkan.");
+    return;
+  }
+  try {
+    matikanStream();
+    kam.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: kam.facing }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    video.srcObject = kam.stream;
+    await video.play();
+    const n = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput").length;
+    $("cam-flip").disabled = n < 2;
+    $("cam-off").hidden = true; $("cam-guide").hidden = false; $("cam-freeze").disabled = false;
+    $("cam-start").textContent = "Matikan kamera";
+    $("live-kosong").hidden = true; $("live").hidden = false;
+    video.style.transform = kam.facing === "user" ? "scaleX(-1)" : "";
+    kam.jalan = true; kam.beku = false; kam.ema = null; $("cam-freeze").textContent = "Bekukan";
+    aturKotak(); requestAnimationFrame(loopKamera);
+  } catch (e) {
+    const pesan = { NotAllowedError: "Izin kamera ditolak. Izinkan akses kamera di pengaturan browser lalu coba lagi.",
+      NotFoundError: "Tidak ada kamera yang terdeteksi di perangkat ini.",
+      NotReadableError: "Kamera sedang dipakai aplikasi lain." }[e.name];
+    tampilErrKamera(pesan || "Gagal menyalakan kamera: " + esc(e.message || e));
+  }
+}
+
+function matikanStream() { if (kam.stream) kam.stream.getTracks().forEach((t) => t.stop()); kam.stream = null; }
+
+function matikanKamera() {
+  kam.jalan = false; matikanStream(); video.srcObject = null;
+  $("cam-off").hidden = false; $("cam-guide").hidden = true; $("cam-label").hidden = true;
+  $("cam-start").textContent = "Nyalakan kamera"; $("cam-flip").disabled = true; $("cam-freeze").disabled = true;
+}
+
+// Kotak panduan: persegi di tengah area video yang terlihat (object-fit: cover)
+function aturKotak() {
+  const box = $("cam").getBoundingClientRect(), s = Math.min(box.width, box.height) * 0.7;
+  Object.assign($("cam-guide").style, { width: s + "px", height: s + "px" });
+}
+window.addEventListener("resize", aturKotak);
+
+// Hitung area frame video (piksel asli) yang berada di dalam kotak panduan
+function areaCrop() {
+  const vw = video.videoWidth, vh = video.videoHeight, box = $("cam").getBoundingClientRect();
+  const skala = Math.max(box.width / vw, box.height / vh); // skala object-fit: cover
+  const sisi = (Math.min(box.width, box.height) * 0.7) / skala;
+  return [(vw - sisi) / 2, (vh - sisi) / 2, sisi, sisi];
+}
+
+async function loopKamera(t) {
+  if (!kam.jalan) return;
+  requestAnimationFrame(loopKamera);
+  if (kam.beku || kam.sibuk || !sesi || video.readyState < 2 || t - kam.tAkhir < INTERVAL_MS) return;
+  kam.sibuk = true;
+  try {
+    const t0 = performance.now();
+    const out = await sesi.run({ [sesi.inputNames[0]]: keTensor(video, info.img_size, info.mean, info.std, areaCrop()) });
+    const prob = softmax(Array.from(out[sesi.outputNames[0]].data));
+    kam.latensi = performance.now() - t0;
+    kam.fps = kam.tAkhir ? 1000 / (t - kam.tAkhir) : 0; kam.tAkhir = t;
+    kam.ema = kam.ema ? kam.ema.map((v, i) => (1 - ALPHA_EMA) * v + ALPHA_EMA * prob[i]) : prob;
+    tampilLive(kam.ema);
+  } catch (e) {
+    tampilErrKamera("Inferensi gagal: " + esc(e.message || e));
+  } finally { kam.sibuk = false; }
+}
+
+function tampilLive(prob) {
+  const urut = prob.map((p, i) => ({ p, k: info.kelas[i] })).sort((a, b) => b.p - a.p);
+  const yakin = urut[0].p >= AMBANG_YAKIN, nama = urut[0].k.replace(/_/g, " ");
+  $("live-label").textContent = yakin ? nama : nama + "?";
+  $("live-info").textContent = `Keyakinan ${(urut[0].p * 100).toFixed(1)}% · ${kam.latensi.toFixed(0)} ms/frame · ${kam.fps.toFixed(1)} prediksi/detik`;
+  $("live-bars").innerHTML = urut.map((r, i) => `<div class="bar-row${i === 0 ? " top" : ""}">
+      <span>${esc(r.k.replace(/_/g, " "))}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(r.p * 100).toFixed(1)}%"></div></div>
+      <span>${(r.p * 100).toFixed(1)}%</span></div>`).join("");
+  $("live-low").hidden = yakin;
+  const lab = $("cam-label");
+  lab.innerHTML = `<span>${esc(yakin ? nama : "Belum yakin: " + nama)}</span><span>${(urut[0].p * 100).toFixed(0)}%</span>`;
+  lab.classList.toggle("low", !yakin); lab.hidden = false;
+}
+
+$("cam-start").addEventListener("click", () => (kam.jalan ? matikanKamera() : nyalakanKamera()));
+$("cam-flip").addEventListener("click", () => { kam.facing = kam.facing === "environment" ? "user" : "environment"; nyalakanKamera(); });
+$("cam-freeze").addEventListener("click", () => {
+  kam.beku = !kam.beku;
+  if (kam.beku) video.pause(); else { video.play(); kam.ema = null; }
+  $("cam-freeze").textContent = kam.beku ? "Lanjutkan" : "Bekukan";
+  $("live-status").textContent = kam.beku ? "Dibekukan" : "Prediksi teratas";
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden && kam.jalan) matikanKamera(); });
+
+// ---------- Hasil simulasi ----------
+function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function parseCSV(t) {
+  const baris = t.trim().split(/\r?\n/).map((l) => l.split(","));
+  const h = baris.shift();
+  return baris.map((r) => Object.fromEntries(h.map((k, i) => [k.trim(), (r[i] ?? "").trim()])));
+}
+const pct = (v) => (parseFloat(v) * 100).toFixed(1) + "%";
+function fmtByte(b) { const u = ["B", "KB", "MB", "GB"]; let i = 0; b = +b; while (b >= 1024 && i < 3) { b /= 1024; i++; } return b.toFixed(1) + " " + u[i]; }
+
+$("pilih-csv").addEventListener("change", async (e) => {
+  const files = [...e.target.files]; const dimuat = [];
+  for (const f of files) {
+    const rows = parseCSV(await f.text()); if (!rows.length) continue;
+    const kol = Object.keys(rows[0]);
+    if (kol.includes("ronde")) { tampilRonde(rows); dimuat.push(f.name); }
+    else if (kol.includes("skenario")) { tampilBanding(rows); dimuat.push(f.name); }
+    else if (kol.includes("klien")) { tampilFair(rows); dimuat.push(f.name); }
+  }
+  $("csv-info").textContent = dimuat.length ? "Dimuat: " + dimuat.join(", ") : "Format file tidak dikenali.";
+  $("sim-kosong").hidden = dimuat.length > 0;
+});
+
+function tampilRonde(rows) {
+  const r = rows.map((x) => +x.ronde), acc = rows.map((x) => +x.accuracy),
+        f1 = rows.map((x) => +x.macro_f1), loss = rows.map((x) => +x.loss);
+  const W = 640, H = 240, L = 40, R = 44, T = 12, B = 28, w = W - L - R, h = H - T - B;
+  const maxR = Math.max(...r, 1), maxL = Math.max(...loss) * 1.1 || 1;
+  const x = (v) => L + (v / maxR) * w, y = (v) => T + h - v * h, yl = (v) => T + h - (v / maxL) * h;
+  const garis = (arr, fy, warna, dash) => `<polyline fill="none" stroke="${warna}" stroke-width="2" ${dash ? 'stroke-dasharray="4 4"' : ""}
+      points="${arr.map((v, i) => x(r[i]) + "," + fy(v)).join(" ")}"/>` +
+      arr.map((v, i) => `<circle cx="${x(r[i])}" cy="${fy(v)}" r="3" fill="${warna}"><title>Ronde ${r[i]}: ${v.toFixed(4)}</title></circle>`).join("");
+  let grid = "";
+  for (let g = 0; g <= 4; g++) {
+    const v = g / 4;
+    grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)"/>
+      <text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${(v * 100).toFixed(0)}%</text>
+      <text x="${W - R + 6}" y="${y(v) + 4}">${(maxL * v).toFixed(2)}</text>`;
+  }
+  const xt = r.map((v) => `<text x="${x(v)}" y="${H - 8}" text-anchor="middle">${v}</text>`).join("");
+  $("chart-ronde").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Grafik per ronde">
+    ${grid}${xt}<text x="${L + w / 2}" y="${H}" text-anchor="middle">ronde</text>
+    ${garis(loss, yl, "var(--bar-3)", true)}${garis(f1, y, "var(--bar-2)")}${garis(acc, y, "var(--bar)")}</svg>`;
+  $("card-ronde").hidden = false;
+
+  const akhir = rows[rows.length - 1];
+  $("kpis").innerHTML = [
+    ["Accuracy akhir", pct(akhir.accuracy)], ["Macro F1 akhir", pct(akhir.macro_f1)],
+    ["Loss akhir", (+akhir.loss).toFixed(3)], ["Ronde", akhir.ronde],
+    ["Total byte dikirim", akhir.byte_kumulatif ? fmtByte(akhir.byte_kumulatif) : "–"],
+  ].map(([k, v]) => `<div class="kpi"><span>${k}</span><b>${esc(v)}</b></div>`).join("");
+  $("card-kpi").hidden = false;
+}
+
+function tampilBanding(rows) {
+  $("tbl-banding").innerHTML = `<tr><th>Skenario</th><th class="num">Accuracy</th><th class="num">Macro F1</th><th class="num">Loss</th><th class="num">n latih</th></tr>` +
+    rows.map((x) => `<tr class="${x.skenario === "global_fedavg" ? "hl" : ""}"><td>${esc(x.skenario.replace(/_/g, " "))}</td>
+      <td class="num">${pct(x.accuracy)}</td><td class="num">${pct(x.macro_f1)}</td>
+      <td class="num">${(+x.loss).toFixed(3)}</td><td class="num">${esc(x.n_latih)}</td></tr>`).join("");
+  $("card-banding").hidden = false;
+}
+
+function tampilFair(rows) {
+  $("tbl-fair").innerHTML = `<tr><th>Klien</th><th class="num">n val</th><th class="num">Accuracy</th></tr>` +
+    rows.map((x) => `<tr class="${isNaN(+x.klien) ? "hl" : ""}"><td>${isNaN(+x.klien) ? esc(x.klien) : "Klien " + esc(x.klien)}</td>
+      <td class="num">${esc(x.n_val)}</td><td class="num">${x.klien === "std" ? (+x.accuracy_global_model).toFixed(4) : pct(x.accuracy_global_model)}</td></tr>`).join("");
+  $("card-fair").hidden = false;
+}
+</script>
+</body>
+</html>
