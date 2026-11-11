@@ -99,6 +99,22 @@
   .cam-off { position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
     padding: 16px; color: #e7ebe1; gap: 4px; }
   .cam-off .muted { color: #b5bdad; }
+  .simpan-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px;
+    font-size: 13px; color: var(--muted); }
+  .simpan-bar label { display: inline-flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; }
+  .simpan-bar .ok { color: var(--accent); font-weight: 500; }
+  .riw-list { display: grid; gap: 8px; }
+  .riw-item { display: grid; grid-template-columns: 56px 1fr auto; gap: 12px; align-items: center;
+    padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+  .riw-item img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: var(--surface-2); }
+  .riw-item b { display: block; }
+  .riw-item .muted { font-size: 12px; }
+  .riw-item.baru { animation: sorot 1.2s ease-out; }
+  @keyframes sorot { from { background: var(--accent-soft); } to { background: var(--surface); } }
+  .btn.kecil { padding: 4px 10px; font-size: 12px; }
+  .riw-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .riw-tools select { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -119,6 +135,7 @@
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="kamera">Kamera Langsung</button>
     <button role="tab" aria-selected="false" data-tab="deteksi">Unggah Foto</button>
+    <button role="tab" aria-selected="false" data-tab="riwayat">Riwayat <span id="riw-badge" class="muted"></span></button>
     <button role="tab" aria-selected="false" data-tab="simulasi">Hasil Simulasi</button>
   </div>
 
@@ -160,6 +177,11 @@
           <button class="btn primary" id="cam-start">Nyalakan kamera</button>
           <button class="btn" id="cam-flip" disabled>Ganti kamera</button>
           <button class="btn" id="cam-freeze" disabled>Bekukan</button>
+          <button class="btn" id="cam-simpan" disabled>Simpan sekarang</button>
+        </div>
+        <div class="simpan-bar">
+          <label><input type="checkbox" id="auto-simpan" checked> Simpan otomatis</label>
+          <span id="simpan-status">Hasil yakin (&ge; 60%) disimpan saat label berubah, atau tiap 10 detik.</span>
         </div>
         <div class="warn" id="cam-err" hidden></div>
       </div>
@@ -212,6 +234,25 @@
     </div>
   </section>
 
+  <!-- ================= TAB RIWAYAT ================= -->
+  <section id="tab-riwayat" hidden>
+    <div class="card" id="card-riw-kpi"><div class="kpis" id="riw-kpis"></div></div>
+    <div class="card">
+      <h2>Riwayat deteksi</h2>
+      <p class="muted" style="margin:0 0 12px">Tersimpan langsung di perangkat ini (IndexedDB browser), tidak dikirim
+        ke server mana pun, sesuai prinsip Federated Learning: data tetap di perangkat pemiliknya.
+        Data tetap ada setelah halaman ditutup, tetapi hilang bila data situs di browser dihapus.</p>
+      <div class="riw-tools">
+        <select id="riw-filter" aria-label="Saring kelas"><option value="">Semua kelas</option></select>
+        <button class="btn" id="riw-csv">Unduh CSV</button>
+        <button class="btn" id="riw-json">Unduh JSON (dengan foto)</button>
+        <button class="btn" id="riw-hapus">Hapus semua</button>
+      </div>
+      <div id="riw-kosong" class="empty">Belum ada deteksi yang tersimpan.</div>
+      <div class="riw-list" id="riw-list"></div>
+    </div>
+  </section>
+
   <!-- ================= TAB HASIL SIMULASI ================= -->
   <section id="tab-simulasi" hidden>
     <div class="card">
@@ -257,7 +298,7 @@ document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("cli
     x.setAttribute("aria-selected", x === b);
     $("tab-" + x.dataset.tab).hidden = x !== b;
   });
-  $("panel-model").hidden = b.dataset.tab === "simulasi";
+  $("panel-model").hidden = b.dataset.tab === "simulasi" || b.dataset.tab === "riwayat";
   if (b.dataset.tab !== "kamera") matikanKamera(); // hemat baterai saat pindah tab
 }));
 
@@ -288,6 +329,7 @@ async function muatModel(m) {
     $("model-warn").hidden = true;
     setStatus(`<b>Model siap</b> <span class="muted">· ${m.model} · ${m.kelas.length} kelas · input ${m.img_size}×${m.img_size}${m.ronde != null ? " · ronde " + m.ronde : ""}</span>`, "ok");
     $("model-chips").innerHTML = m.kelas.map((k) => `<span class="chip">${esc(k)}</span>`).join("");
+    tampilRiwayat();
     if (citraTerakhir) prediksi(citraTerakhir);
   } catch (e) {
     setStatus("<b>Gagal memuat model:</b> " + esc(e.message || e), "err");
@@ -363,6 +405,7 @@ async function prediksi(img) {
       <span>${(r.p * 100).toFixed(1)}%</span></div>`).join("");
   $("low-conf").hidden = urut[0].p >= 0.6;
   $("hasil").hidden = false; $("hasil-kosong").hidden = true;
+  simpanDeteksi("foto", prob, img); // setiap foto yang diunggah langsung tercatat
 }
 
 // ---------- Kamera langsung ----------
@@ -372,6 +415,7 @@ const kam = { stream: null, facing: "environment", jalan: false, beku: false, si
 const INTERVAL_MS = 200;   // jeda minimal antar inferensi (~5 prediksi/detik)
 const ALPHA_EMA = 0.4;     // bobot frame terbaru saat menghaluskan probabilitas
 const AMBANG_YAKIN = 0.6;  // di bawah ini dianggap "belum yakin"
+const JEDA_SIMPAN_MS = 10000; // label sama disimpan ulang paling cepat tiap 10 detik
 
 function tampilErrKamera(pesan) { $("cam-err").innerHTML = pesan; $("cam-err").hidden = !pesan; }
 
@@ -391,6 +435,7 @@ async function nyalakanKamera() {
     const n = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput").length;
     $("cam-flip").disabled = n < 2;
     $("cam-off").hidden = true; $("cam-guide").hidden = false; $("cam-freeze").disabled = false;
+    $("cam-simpan").disabled = false; kam.labelTersimpan = null; kam.tSimpan = 0;
     $("cam-start").textContent = "Matikan kamera";
     $("live-kosong").hidden = true; $("live").hidden = false;
     video.style.transform = kam.facing === "user" ? "scaleX(-1)" : "";
@@ -410,6 +455,7 @@ function matikanKamera() {
   kam.jalan = false; matikanStream(); video.srcObject = null;
   $("cam-off").hidden = false; $("cam-guide").hidden = true; $("cam-label").hidden = true;
   $("cam-start").textContent = "Nyalakan kamera"; $("cam-flip").disabled = true; $("cam-freeze").disabled = true;
+  $("cam-simpan").disabled = true;
 }
 
 // Kotak panduan: persegi di tengah area video yang terlihat (object-fit: cover)
@@ -422,6 +468,7 @@ window.addEventListener("resize", aturKotak);
 // Hitung area frame video (piksel asli) yang berada di dalam kotak panduan
 function areaCrop() {
   const vw = video.videoWidth, vh = video.videoHeight, box = $("cam").getBoundingClientRect();
+  if (!box.width || !box.height) { const sisi = Math.min(vw, vh) * 0.7; return [(vw - sisi) / 2, (vh - sisi) / 2, sisi, sisi]; }
   const skala = Math.max(box.width / vw, box.height / vh); // skala object-fit: cover
   const sisi = (Math.min(box.width, box.height) * 0.7) / skala;
   return [(vw - sisi) / 2, (vh - sisi) / 2, sisi, sisi];
@@ -430,7 +477,7 @@ function areaCrop() {
 async function loopKamera(t) {
   if (!kam.jalan) return;
   requestAnimationFrame(loopKamera);
-  if (kam.beku || kam.sibuk || !sesi || video.readyState < 2 || t - kam.tAkhir < INTERVAL_MS) return;
+  if (kam.beku || kam.sibuk || !sesi || video.readyState < 2 || !video.videoWidth || t - kam.tAkhir < INTERVAL_MS) return;
   kam.sibuk = true;
   try {
     const t0 = performance.now();
@@ -458,6 +505,14 @@ function tampilLive(prob) {
   const lab = $("cam-label");
   lab.innerHTML = `<span>${esc(yakin ? nama : "Belum yakin: " + nama)}</span><span>${(urut[0].p * 100).toFixed(0)}%</span>`;
   lab.classList.toggle("low", !yakin); lab.hidden = false;
+  kam.probTerakhir = prob;
+  if (yakin && $("auto-simpan").checked && !kam.beku) {
+    const sekarang = Date.now();
+    if (urut[0].k !== kam.labelTersimpan || sekarang - kam.tSimpan >= JEDA_SIMPAN_MS) {
+      kam.labelTersimpan = urut[0].k; kam.tSimpan = sekarang;
+      simpanDeteksi("kamera", prob, video, areaCrop());
+    }
+  }
 }
 
 $("cam-start").addEventListener("click", () => (kam.jalan ? matikanKamera() : nyalakanKamera()));
@@ -469,6 +524,128 @@ $("cam-freeze").addEventListener("click", () => {
   $("live-status").textContent = kam.beku ? "Dibekukan" : "Prediksi teratas";
 });
 document.addEventListener("visibilitychange", () => { if (document.hidden && kam.jalan) matikanKamera(); });
+
+$("cam-simpan").addEventListener("click", () => {
+  if (kam.probTerakhir) simpanDeteksi("kamera", kam.probTerakhir, video, areaCrop(), true);
+});
+
+// ---------- Riwayat (IndexedDB, real time) ----------
+// Tiap deteksi disimpan langsung ke IndexedDB di perangkat. Tab lain yang membuka halaman
+// yang sama ikut diperbarui lewat BroadcastChannel.
+const DB_NAMA = "deteksi-cabai", DB_STORE = "riwayat";
+let db = null, cacheRiwayat = [], memori = []; // memori = cadangan bila IndexedDB tidak tersedia
+const kanal = "BroadcastChannel" in window ? new BroadcastChannel("riwayat-cabai") : null;
+
+function bukaDB() {
+  return new Promise((ok) => {
+    try {
+      const req = indexedDB.open(DB_NAMA, 1);
+      req.onupgradeneeded = () => {
+        const st = req.result.createObjectStore(DB_STORE, { keyPath: "id", autoIncrement: true });
+        st.createIndex("waktu", "waktu");
+      };
+      req.onsuccess = () => ok(req.result);
+      req.onerror = () => ok(null);
+    } catch (e) { ok(null); }
+  });
+}
+function tx(mode) { return db.transaction(DB_STORE, mode).objectStore(DB_STORE); }
+function semuaRiwayat() {
+  if (!db) return Promise.resolve([...memori]);
+  return new Promise((ok) => { const r = tx("readonly").getAll(); r.onsuccess = () => ok(r.result); r.onerror = () => ok([]); });
+}
+
+function thumbnail(src, crop) {
+  const c = document.createElement("canvas"), U = 160;
+  const w = crop ? crop[2] : (src.naturalWidth || src.videoWidth), h = crop ? crop[3] : (src.naturalHeight || src.videoHeight);
+  if (!w || !h) return "";
+  const s = U / Math.max(w, h); c.width = Math.round(w * s); c.height = Math.round(h * s);
+  const ctx = c.getContext("2d");
+  if (crop) ctx.drawImage(src, ...crop, 0, 0, c.width, c.height); else ctx.drawImage(src, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.75);
+}
+
+async function simpanDeteksi(sumber, prob, src, crop, manual) {
+  const i = prob.indexOf(Math.max(...prob));
+  const rec = {
+    waktu: new Date().toISOString(), sumber, label: info.kelas[i], keyakinan: prob[i],
+    prob: Object.fromEntries(info.kelas.map((k, j) => [k, +prob[j].toFixed(4)])),
+    model: `${info.model} r${info.ronde ?? "-"}`, foto: thumbnail(src, crop),
+  };
+  if (db) {
+    rec.id = await new Promise((ok) => { const r = tx("readwrite").add(rec); r.onsuccess = () => ok(r.result); r.onerror = () => ok(null); });
+  } else { rec.id = Date.now(); memori.push(rec); }
+  cacheRiwayat.push(rec);
+  tampilRiwayat(rec.id);
+  if (kanal) kanal.postMessage({ jenis: "tambah", rec });
+  const jam = new Date(rec.waktu).toLocaleTimeString("id-ID");
+  if (sumber === "kamera") $("simpan-status").innerHTML =
+    `<span class="ok">Tersimpan:</span> ${esc(rec.label.replace(/_/g, " "))} ${(rec.keyakinan * 100).toFixed(0)}% · ${jam}${manual ? " (manual)" : ""}`;
+}
+
+async function hapusRiwayat(id) {
+  if (db) await new Promise((ok) => { const r = tx("readwrite").delete(id); r.onsuccess = r.onerror = () => ok(); });
+  else memori = memori.filter((r) => r.id !== id);
+  cacheRiwayat = cacheRiwayat.filter((r) => r.id !== id);
+  tampilRiwayat();
+  if (kanal) kanal.postMessage({ jenis: "hapus", id });
+}
+
+function tampilRiwayat(idBaru) {
+  const n = cacheRiwayat.length;
+  $("riw-badge").textContent = n ? `(${n})` : "";
+  // ringkasan per kelas
+  const per = {}; cacheRiwayat.forEach((r) => (per[r.label] = (per[r.label] || 0) + 1));
+  const kelas = info ? info.kelas : Object.keys(per);
+  $("riw-kpis").innerHTML = `<div class="kpi"><span>Total deteksi</span><b>${n}</b></div>` +
+    kelas.map((k) => `<div class="kpi"><span>${esc(k.replace(/_/g, " "))}</span><b>${per[k] || 0}</b></div>`).join("");
+  const sel = $("riw-filter"), pilih = sel.value;
+  if (sel.options.length !== kelas.length + 1)
+    sel.innerHTML = `<option value="">Semua kelas</option>` + kelas.map((k) => `<option value="${esc(k)}">${esc(k.replace(/_/g, " "))}</option>`).join("");
+  sel.value = pilih;
+  const daftar = cacheRiwayat.filter((r) => !pilih || r.label === pilih).slice().reverse().slice(0, 300);
+  $("riw-kosong").hidden = daftar.length > 0;
+  $("riw-list").innerHTML = daftar.map((r) => `<div class="riw-item${r.id === idBaru ? " baru" : ""}">
+      ${r.foto ? `<img src="${r.foto}" alt="">` : `<img alt="">`}
+      <div><b>${esc(r.label.replace(/_/g, " "))} · ${(r.keyakinan * 100).toFixed(1)}%</b>
+        <span class="muted">${new Date(r.waktu).toLocaleString("id-ID")} · ${r.sumber === "kamera" ? "Kamera langsung" : "Unggah foto"} · ${esc(r.model)}</span></div>
+      <button class="btn kecil" data-hapus="${r.id}" aria-label="Hapus">Hapus</button></div>`).join("") +
+    (cacheRiwayat.length > 300 ? `<div class="muted">Menampilkan 300 terbaru. Unduh CSV untuk data lengkap.</div>` : "");
+}
+
+$("riw-list").addEventListener("click", (e) => { const b = e.target.closest("[data-hapus]"); if (b) hapusRiwayat(+b.dataset.hapus); });
+$("riw-filter").addEventListener("change", () => tampilRiwayat());
+$("riw-hapus").addEventListener("click", async () => {
+  if (!cacheRiwayat.length || !confirm(`Hapus ${cacheRiwayat.length} riwayat deteksi dari perangkat ini? Tindakan ini tidak bisa dibatalkan.`)) return;
+  if (db) await new Promise((ok) => { const r = tx("readwrite").clear(); r.onsuccess = r.onerror = () => ok(); });
+  memori = []; cacheRiwayat = []; tampilRiwayat();
+  if (kanal) kanal.postMessage({ jenis: "kosong" });
+});
+function unduh(nama, isi, tipe) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([isi], { type: tipe }));
+  a.download = nama; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const stempel = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+$("riw-csv").addEventListener("click", () => {
+  const kelas = info ? info.kelas : [];
+  const baris = [["id", "waktu", "sumber", "label", "keyakinan", ...kelas.map((k) => "p_" + k), "model"].join(",")];
+  cacheRiwayat.forEach((r) => baris.push([r.id, r.waktu, r.sumber, r.label, r.keyakinan.toFixed(4),
+    ...kelas.map((k) => r.prob[k] ?? ""), `"${r.model}"`].join(",")));
+  unduh(`riwayat_deteksi_${stempel()}.csv`, baris.join("\n"), "text/csv");
+});
+$("riw-json").addEventListener("click", () => unduh(`riwayat_deteksi_${stempel()}.json`, JSON.stringify(cacheRiwayat, null, 1), "application/json"));
+
+if (kanal) kanal.onmessage = ({ data }) => {
+  if (data.jenis === "tambah") { cacheRiwayat.push(data.rec); tampilRiwayat(data.rec.id); }
+  if (data.jenis === "hapus") { cacheRiwayat = cacheRiwayat.filter((r) => r.id !== data.id); tampilRiwayat(); }
+  if (data.jenis === "kosong") { cacheRiwayat = []; tampilRiwayat(); }
+};
+
+(async () => {
+  db = await bukaDB();
+  cacheRiwayat = (await semuaRiwayat()).sort((a, b) => a.id - b.id);
+  tampilRiwayat();
+})();
 
 // ---------- Hasil simulasi ----------
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }

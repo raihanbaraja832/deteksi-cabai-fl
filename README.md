@@ -5,6 +5,7 @@ Halaman uji coba model global hasil simulasi Federated Learning (FedAvg) untuk p
 
 - **Kamera Langsung**: deteksi real-time dari kamera HP/laptop (inferensi di browser, onnxruntime-web).
 - **Unggah Foto**: prediksi dari satu citra.
+- **Riwayat**: setiap hasil deteksi tersimpan langsung (real time) di perangkat (IndexedDB), lengkap dengan waktu, label, keyakinan, dan foto kecil. Bisa diunduh sebagai CSV/JSON.
 - **Hasil Simulasi**: muat `per_ronde.csv`, `perbandingan.csv`, `fairness.csv` hasil `fl_cabai.py`.
 
 Model dimuat dari `model_cabai.js` (dibuat oleh `ekspor_web.py`). Ganti file ini untuk memperbarui model.
